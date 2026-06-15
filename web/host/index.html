@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Trivia Together — Host</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 0; background:#101427; color:#fff;
+           min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1.5rem; }
+    h1 { font-size: clamp(2rem, 6vw, 4rem); margin:0; }
+    .code { font-size: clamp(3rem, 12vw, 7rem); letter-spacing:.3em; font-weight:800; color:#7cf; }
+    ul { list-style:none; padding:0; display:flex; flex-wrap:wrap; gap:.75rem; justify-content:center; }
+    li { background:#22305c; padding:.5rem 1rem; border-radius:999px; }
+    button { font-size:1.25rem; padding:.75rem 2rem; border:0; border-radius:12px; background:#7cf; color:#101427; font-weight:700; cursor:pointer; }
+    .answers { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
+    .answers div { background:#22305c; padding:1rem 2rem; border-radius:12px; font-size:1.5rem; }
+    .answers div.correct { background:#2ecc71; color:#101427; }
+  </style>
+</head>
+<body>
+  <div id="app">Loading…</div>
+  <script type="module">
+    import { signInAnon } from "../shared/firebase.js";
+    import { QUESTIONS } from "../shared/questions.js";
+    import { createRoom, observeRoom, startQuestion, revealAndScore } from "../shared/room.js";
+
+    const app = document.getElementById("app");
+    const Q = 0; // single-round slice
+
+    let uid, code;
+    try {
+      uid = await signInAnon();
+      code = await createRoom(uid);
+    } catch (e) {
+      app.textContent = "Could not start a room. Check your connection and refresh.";
+      throw e;
+    }
+
+    observeRoom(code, (room) => {
+      if (!room) return;
+      if (room.status === "lobby") return renderLobby(room);
+      if (room.status === "question") return renderQuestion(room);
+      if (room.status === "reveal") return renderReveal(room);
+    });
+
+    function players(room) { return Object.values(room.players || {}); }
+
+    function renderLobby(room) {
+      app.innerHTML = `
+        <h1>Join at this code:</h1>
+        <div class="code">${code}</div>
+        <ul>${players(room).map(p => `<li>${esc(p.name)}</li>`).join("")}</ul>
+        <button id="start">Start question</button>`;
+      document.getElementById("start").onclick = () => startQuestion(code, Q);
+    }
+
+    function renderQuestion(room) {
+      const q = room.question;
+      app.innerHTML = `
+        <h1>${esc(q.prompt)}</h1>
+        <div class="answers">${q.answers.map(a => `<div>${esc(a)}</div>`).join("")}</div>
+        <button id="reveal">Reveal answer</button>`;
+      document.getElementById("reveal").onclick = () => revealAndScore(code, Q);
+    }
+
+    function renderReveal(room) {
+      const q = QUESTIONS[Q];
+      const ranked = players(room).sort((a,b) => (b.score||0)-(a.score||0));
+      app.innerHTML = `
+        <h1>Answer: ${esc(q.answers[q.correctIndex])}</h1>
+        <div class="answers">${q.answers.map((a,i) =>
+          `<div class="${i===q.correctIndex?"correct":""}">${esc(a)}</div>`).join("")}</div>
+        <ul>${ranked.map(p => `<li>${esc(p.name)} — ${p.score||0}</li>`).join("")}</ul>`;
+    }
+
+    function esc(s){ return String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c])); }
+  </script>
+</body>
+</html>

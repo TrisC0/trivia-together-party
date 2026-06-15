@@ -1,0 +1,19 @@
+node_modules/
+firebase-tests/node_modules/
+
+# Firebase / emulator local state
+.firebase/
+database-debug.log
+firebase-debug.log
+ui-debug.log
+
+# Server-side secrets — NEVER commit (public repo).
+# The client firebaseConfig / web client ID are NOT secrets; these are.
+*-firebase-adminsdk-*.json
+serviceAccount*.json
+service-account*.json
+.env
+.env.*
+.runtimeconfig.json
+
+.DS_Store

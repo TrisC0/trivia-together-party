@@ -1,0 +1,59 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+
+    "rooms": {
+      "$code": {
+        ".read": "auth != null",
+        ".write": "auth != null && ((!data.exists() && newData.child('host').val() === auth.uid) || data.child('host').val() === auth.uid)",
+
+        "host":   { ".validate": "newData.isString()" },
+        "status": { ".validate": "newData.val() === 'lobby' || newData.val() === 'question' || newData.val() === 'reveal' || newData.val() === 'ended'" },
+        "currentQuestionIndex": { ".validate": "newData.isNumber()" },
+        "createdAt": { ".validate": "newData.isNumber()" },
+
+        "question": {
+          "prompt":  { ".validate": "newData.isString()" },
+          "answers": { ".validate": "newData.hasChildren()" },
+          "index":   { ".validate": "newData.isNumber()" },
+          "$other":  { ".validate": false }
+        },
+
+        "reveal": {
+          "questionIndex": { ".validate": "newData.isNumber()" },
+          "correctIndex":  { ".validate": "newData.isNumber()" },
+          "$other":        { ".validate": false }
+        },
+
+        "players": {
+          ".indexOn": ["score"],
+          "$uid": {
+            ".write": "auth != null && ($uid === auth.uid || root.child('rooms').child($code).child('host').val() === auth.uid)",
+            "name":     { ".validate": "newData.isString() && newData.val().length <= 24" },
+            "avatar":   { ".validate": "newData.isString()" },
+            "joinedAt": { ".validate": "newData.isNumber()" },
+            "score":    { ".validate": "newData.isNumber() && root.child('rooms').child($code).child('host').val() === auth.uid" },
+            "$other":   { ".validate": false }
+          }
+        },
+
+        "$other": { ".validate": false }
+      }
+    },
+
+    "answers": {
+      "$code": {
+        ".read": "auth != null && root.child('rooms').child($code).child('host').val() === auth.uid",
+        "$qIndex": {
+          "$uid": {
+            ".write": "auth != null && $uid === auth.uid && !data.exists() && root.child('rooms').child($code).child('status').val() === 'question'",
+            "choice":     { ".validate": "newData.isNumber()" },
+            "answeredAt": { ".validate": "newData.isNumber()" },
+            "$other":     { ".validate": false }
+          }
+        }
+      }
+    }
+  }
+}
