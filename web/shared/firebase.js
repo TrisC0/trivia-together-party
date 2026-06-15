@@ -8,13 +8,18 @@ import {
   getDatabase, connectDatabaseEmulator,
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 
-// Placeholder config — overwritten with the real firebaseConfig at deploy time.
-// These values are NOT secrets; security comes from database.rules.json.
+// Real client config for the `trivia-together` Firebase project. These values are
+// NOT secrets (they ship to every browser); security comes from database.rules.json.
+// On localhost the emulator connection below overrides the live endpoints.
 const firebaseConfig = {
-  apiKey: "demo-key",
-  projectId: "trivia-together-demo",
-  databaseURL: "http://localhost:9000?ns=trivia-together-demo-default-rtdb",
-  appId: "demo-app",
+  apiKey: "AIzaSyBYGy6WsKKcadIsWzFNnuAkMFiBY58IJcc",
+  authDomain: "trivia-together.firebaseapp.com",
+  databaseURL: "https://trivia-together-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "trivia-together",
+  storageBucket: "trivia-together.firebasestorage.app",
+  messagingSenderId: "214453010577",
+  appId: "1:214453010577:web:fffd5e99ded8e17c8bbf30",
+  measurementId: "G-CS9Q4PLM27",
 };
 
 export const app = initializeApp(firebaseConfig);
