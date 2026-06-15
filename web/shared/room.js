@@ -31,13 +31,13 @@ export async function createRoom(uid) {
 }
 
 /** Player: join `code` as `uid` with `name`. Throws if the room does not exist. */
-export async function joinRoom(code, uid, name) {
+export async function joinRoom(code, uid, name, avatar = "🙂") {
   const snap = await get(ref(db, `rooms/${code}`));
   if (!snap.exists()) throw new Error("Room not found");
   // `update` (not `set`) and no onDisconnect removal, so a refresh/reconnect keeps the
   // player's slot and host-assigned score. No `score` here — it stays host-authoritative.
   await update(ref(db, `rooms/${code}/players/${uid}`), {
-    name: name.slice(0, 24), joinedAt: serverTimestamp(),
+    name: name.slice(0, 24), avatar, joinedAt: serverTimestamp(),
   });
 }
 

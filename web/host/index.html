@@ -132,7 +132,7 @@
         app.innerHTML = `
           <h1>Join at this code:</h1>
           <div class="code">${code}</div>
-          <ul>${players.map(p => `<li>${esc(p.name)}</li>`).join("")}</ul>
+          <ul>${players.map(p => `<li>${esc(p.avatar || "")} ${esc(p.name)}</li>`).join("")}</ul>
           <div class="pickers">
             <select id="cat" ${loading ? "disabled" : ""}>${catOpts}</select>
             <select id="diff" ${loading ? "disabled" : ""}>${diffOpts}</select>
@@ -162,7 +162,7 @@
           <div class="answers">${q.answers.map((a, i) =>
             `<div class="${i === q.correctIndex ? "correct" : ""}">${esc(a)}</div>`).join("")}</div>
           <ol class="board">${ranked.map(p =>
-            `<li><span>${esc(p.name)}</span><span>${p.score || 0}</span></li>`).join("")}</ol>
+            `<li><span>${esc(p.avatar || "")} ${esc(p.name)}</span><span>${p.score || 0}</span></li>`).join("")}</ol>
           <button id="next">${last ? "Final results" : "Next question"}</button>`;
         bind("next", () => last ? endGame(code) : startQuestion(code, idx + 1, gameQuestions[idx + 1]));
 
@@ -170,9 +170,9 @@
         const winner = ranked[0];
         app.innerHTML = `
           <h1>Final results</h1>
-          ${winner ? `<div class="winner">🏆 ${esc(winner.name)} wins!</div>` : ""}
+          ${winner ? `<div class="winner">🏆 ${esc(winner.avatar || "")} ${esc(winner.name)} wins!</div>` : ""}
           <ol class="board">${ranked.map(p =>
-            `<li><span>${esc(p.name)}</span><span>${p.score || 0}</span></li>`).join("")}</ol>
+            `<li><span>${esc(p.avatar || "")} ${esc(p.name)}</span><span>${p.score || 0}</span></li>`).join("")}</ol>
           <button id="again">Play again</button>`;
         bind("again", () => resetGame(code));
       }
