@@ -94,3 +94,15 @@ export async function revealAndScore(code, qIndex, correctIndex) {
 export async function endGame(code) {
   await update(ref(db, `rooms/${code}`), { status: "ended" });
 }
+
+/** Host: reset to the lobby for a new game, zeroing every player's score. */
+export async function resetGame(code) {
+  const players = (await get(ref(db, `rooms/${code}/players`))).val() || {};
+  const updates = {};
+  for (const id of Object.keys(players)) updates[`rooms/${code}/players/${id}/score`] = 0;
+  updates[`rooms/${code}/status`] = "lobby";
+  updates[`rooms/${code}/currentQuestionIndex`] = 0;
+  updates[`rooms/${code}/question`] = null;
+  updates[`rooms/${code}/reveal`] = null;
+  await update(ref(db), updates);
+}

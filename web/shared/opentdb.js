@@ -44,15 +44,24 @@ export const CATEGORIES = [
   { id: 21, label: "Sports" },
 ];
 
+/** OpenTDB difficulty levels for the host picker. */
+export const DIFFICULTIES = [
+  { id: null, label: "Any difficulty" },
+  { id: "easy", label: "Easy" },
+  { id: "medium", label: "Medium" },
+  { id: "hard", label: "Hard" },
+];
+
 /**
  * Fetch a round of multiple-choice questions from OpenTDB. Returns [] on any
  * failure (caller falls back to the bundled bank). fetchImpl is injectable for tests.
  */
 export async function fetchQuestions({
-  amount = 8, category = null, fetchImpl = fetch, baseUrl = "https://opentdb.com/api.php",
+  amount = 8, category = null, difficulty = null, fetchImpl = fetch, baseUrl = "https://opentdb.com/api.php",
 } = {}) {
   const params = new URLSearchParams({ amount: String(amount), type: "multiple", encode: "base64" });
   if (category) params.set("category", String(category));
+  if (difficulty) params.set("difficulty", String(difficulty));
   try {
     const res = await fetchImpl(`${baseUrl}?${params.toString()}`);
     const data = await res.json();

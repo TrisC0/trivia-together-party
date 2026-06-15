@@ -1,7 +1,7 @@
 // Unit tests for the pure OpenTDB transform (decode + shuffle into our question shape).
 // No network, no emulator.
 import { test, expect } from "vitest";
-import { decodeB64, toQuestion } from "../web/shared/opentdb.js";
+import { decodeB64, toQuestion, fetchQuestions } from "../web/shared/opentdb.js";
 
 const b64 = (s) => Buffer.from(s, "utf8").toString("base64");
 
@@ -27,4 +27,24 @@ test("correctIndex always points to the correct answer, whatever the shuffle", (
     const q = toQuestion(dto, rand);
     expect(q.answers[q.correctIndex]).toBe("4");
   }
+});
+
+test("fetchQuestions builds the URL with amount, type, category and difficulty", async () => {
+  let calledUrl = "";
+  const fakeFetch = async (url) => { calledUrl = url; return { json: async () => ({ response_code: 0, results: [dto] }) }; };
+  const out = await fetchQuestions({ amount: 5, category: 9, difficulty: "easy", fetchImpl: fakeFetch });
+  expect(calledUrl).toContain("amount=5");
+  expect(calledUrl).toContain("type=multiple");
+  expect(calledUrl).toContain("encode=base64");
+  expect(calledUrl).toContain("category=9");
+  expect(calledUrl).toContain("difficulty=easy");
+  expect(out).toHaveLength(1);
+});
+
+test("fetchQuestions omits category and difficulty when not given", async () => {
+  let calledUrl = "";
+  const fakeFetch = async (url) => { calledUrl = url; return { json: async () => ({ response_code: 0, results: [] }) }; };
+  await fetchQuestions({ amount: 5, fetchImpl: fakeFetch });
+  expect(calledUrl).not.toContain("category=");
+  expect(calledUrl).not.toContain("difficulty=");
 });
