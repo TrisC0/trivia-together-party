@@ -17,6 +17,9 @@
     .timer { font-size:2rem; font-weight:800; color:#7cf; }
     .big { font-size:2rem; font-weight:800; color:#7cf; margin:.2rem 0; }
     .msg { opacity:.8; }
+    .avatars { display:grid; grid-template-columns:repeat(6, 1fr); gap:.4rem; width:100%; max-width:340px; }
+    .av { width:auto; font-size:1.5rem; padding:.35rem 0; background:#22305c; border-radius:10px; }
+    .av.sel { outline:3px solid #7cf; }
   </style>
 </head>
 <body>
@@ -27,7 +30,8 @@
     import { joinRoom, observeRoom, submitAnswer, getRoom } from "../shared/room.js";
 
     const app = document.getElementById("app");
-    let code = null, answeredFor = -1, tick = null;
+    const AVATARS = ["🦊", "🐼", "🐸", "🐙", "🦁", "🐝", "🦄", "🐧", "🐢", "🦉", "🐶", "🐱"];
+    let code = null, answeredFor = -1, tick = null, selectedAvatar = AVATARS[0];
 
     const JOIN_KEY = "tt-join";
     let uid = null;
@@ -44,7 +48,8 @@
       const room = await getRoom(saved.code);
       if (room) {
         code = saved.code;
-        await joinRoom(code, uid, saved.name);
+        selectedAvatar = saved.avatar || selectedAvatar;
+        await joinRoom(code, uid, saved.name, selectedAvatar);
         observeRoom(code, render);
       } else {
         localStorage.removeItem(JOIN_KEY);
@@ -60,17 +65,23 @@
         ${error ? `<p class="msg">${error}</p>` : ""}
         <input id="code" maxlength="4" placeholder="CODE" />
         <input id="name" class="name" maxlength="24" placeholder="Your name" />
+        <div class="avatars">${AVATARS.map(a =>
+          `<button type="button" class="av ${a === selectedAvatar ? "sel" : ""}" data-a="${a}">${a}</button>`).join("")}</div>
         <button id="go">Join</button>`;
       document.getElementById("go").onclick = join;
+      app.querySelectorAll(".av").forEach(b => b.onclick = () => {
+        selectedAvatar = b.dataset.a;
+        app.querySelectorAll(".av").forEach(x => x.classList.toggle("sel", x === b));
+      });
     }
 
     async function join() {
       const c = document.getElementById("code").value.trim().toUpperCase();
       const name = document.getElementById("name").value.trim() || "Player";
       try {
-        await joinRoom(c, uid, name);
+        await joinRoom(c, uid, name, selectedAvatar);
         code = c;
-        localStorage.setItem(JOIN_KEY, JSON.stringify({ code, name }));
+        localStorage.setItem(JOIN_KEY, JSON.stringify({ code, name, avatar: selectedAvatar }));
         observeRoom(code, render);
       } catch (e) {
         renderJoin("Room not found. Check the code.");
