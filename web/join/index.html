@@ -7,13 +7,15 @@
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   <style>
     body { font-family:system-ui, sans-serif; margin:0; background:#101427; color:#fff;
-           min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1rem; padding:1rem; }
+           min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1rem; padding:1rem; text-align:center; }
     input { font-size:1.25rem; padding:.6rem; border-radius:10px; border:0; text-transform:uppercase; width:80%; max-width:320px; }
     input.name { text-transform:none; }
     button { font-size:1.25rem; padding:.75rem 1.5rem; border:0; border-radius:12px; background:#7cf; color:#101427; font-weight:700; width:80%; max-width:320px; }
     .answers { display:grid; gap:.75rem; width:100%; max-width:360px; }
     .answers button { width:100%; }
-    .answers button:disabled { opacity:.5; }
+    .answers button:disabled { opacity:.45; }
+    .timer { font-size:2rem; font-weight:800; color:#7cf; }
+    .big { font-size:2rem; font-weight:800; color:#7cf; margin:.2rem 0; }
     .msg { opacity:.8; }
   </style>
 </head>
@@ -21,12 +23,19 @@
   <div id="app">Loading…</div>
   <script type="module">
     import { signInAnon } from "../shared/firebase.js";
+    import { QUESTION_DURATION_MS } from "../shared/scoring.js";
     import { joinRoom, observeRoom, submitAnswer } from "../shared/room.js";
 
     const app = document.getElementById("app");
-    const uid = await signInAnon();
-    let code = null, answeredFor = -1;
+    let code = null, answeredFor = -1, tick = null;
 
+    let uid = null;
+    try {
+      uid = await signInAnon();
+    } catch (e) {
+      app.textContent = "Couldn't connect. Check your connection and refresh.";
+      throw e;
+    }
     renderJoin();
 
     function renderJoin(error) {
@@ -53,12 +62,16 @@
 
     function render(room) {
       if (!room) return;
+      stopTick();
       if (room.status === "lobby") {
         app.innerHTML = `<h2>You're in!</h2><p class="msg">Waiting for the host to start…</p>`;
       } else if (room.status === "question") {
         renderQuestion(room);
       } else if (room.status === "reveal") {
-        renderReveal(room);
+        const me = (room.players || {})[uid] || {};
+        app.innerHTML = `<h2>Score</h2><p class="big">${me.score || 0}</p><p class="msg">See the big screen for the answer.</p>`;
+      } else if (room.status === "ended") {
+        renderEnded(room);
       }
     }
 
@@ -66,9 +79,10 @@
       const q = room.question;
       const locked = answeredFor === q.index;
       app.innerHTML = `
+        <div class="timer" id="cd">…</div>
         <h2>${esc(q.prompt)}</h2>
-        <div class="answers">${q.answers.map((a,i) =>
-          `<button data-i="${i}" ${locked?"disabled":""}>${esc(a)}</button>`).join("")}</div>
+        <div class="answers">${q.answers.map((a, i) =>
+          `<button data-i="${i}" ${locked ? "disabled" : ""}>${esc(a)}</button>`).join("")}</div>
         ${locked ? `<p class="msg">Answer locked in.</p>` : ""}`;
       if (!locked) {
         app.querySelectorAll(".answers button").forEach(b => b.onclick = async () => {
@@ -77,18 +91,31 @@
           renderQuestion(room);
         });
       }
+      const startedAt = q.startedAt || Date.now();
+      stopTick();
+      tick = setInterval(() => {
+        const remaining = Math.max(0, startedAt + QUESTION_DURATION_MS - Date.now());
+        const el = document.getElementById("cd");
+        if (el) el.textContent = Math.ceil(remaining / 1000) + "s";
+        if (remaining <= 0) {
+          stopTick();
+          app.querySelectorAll(".answers button").forEach(b => b.disabled = true);
+        }
+      }, 250);
     }
 
-    function renderReveal(room) {
+    function renderEnded(room) {
+      const entries = Object.entries(room.players || {}).sort((a, b) => (b[1].score || 0) - (a[1].score || 0));
+      const myRank = entries.findIndex(([id]) => id === uid) + 1;
       const me = (room.players || {})[uid] || {};
-      const correctIndex = room.reveal ? room.reveal.correctIndex : -1;
-      const gotIt = answeredFor === room.currentQuestionIndex; // submitted this round
       app.innerHTML = `
-        <h2>Score: ${me.score || 0}</h2>
-        <p class="msg">${gotIt ? "Answer revealed on the big screen." : "No answer submitted."}</p>`;
+        <h2>Game over</h2>
+        <p class="big">#${myRank || "-"} · ${me.score || 0} pts</p>
+        <p class="msg">Thanks for playing!</p>`;
     }
 
-    function esc(s){ return String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c])); }
+    function stopTick() { if (tick) { clearInterval(tick); tick = null; } }
+    function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" }[c])); }
   </script>
 </body>
 </html>

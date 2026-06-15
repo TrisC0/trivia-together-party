@@ -1,19 +1,18 @@
-// End-to-end data-flow test for the Together slice. Replays the exact sequence the
-// host and join pages perform (host creates room, player joins, host asks a question,
-// player answers, host reveals + scores) using REAL anonymous auth against the
-// emulator — so it exercises database.rules.json the way real clients do, not the
-// admin context the rules.test.js uses. Reuses the real question bank.
+// End-to-end data-flow test for a full Together game. Replays the sequence the host
+// and join pages perform (mirroring web/shared/room.js) using REAL anonymous auth
+// against the emulator, so it exercises database.rules.json the way real clients do.
+// Uses fixed timestamps so the speed-bonus scores are deterministic.
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { beforeAll, afterAll, test, expect } from "vitest";
 import { initializeApp, deleteApp } from "firebase/app";
 import { getAuth, connectAuthEmulator, signInAnonymously } from "firebase/auth";
-import {
-  getDatabase, connectDatabaseEmulator, ref, set, update, get, serverTimestamp,
-} from "firebase/database";
+import { getDatabase, connectDatabaseEmulator, ref, set, update, get } from "firebase/database";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const { QUESTIONS } = await import(resolve(here, "../web/shared/questions.js"));
+const { roundScore, QUESTION_DURATION_MS, BASE_POINTS, SPEED_POINTS } =
+  await import(resolve(here, "../web/shared/scoring.js"));
 
 const config = {
   apiKey: "demo-key",
@@ -22,66 +21,90 @@ const config = {
   appId: "demo-app",
 };
 
-// Two independent apps so host and player are two distinct anonymous users.
 function makeClient(name) {
   const app = initializeApp(config, name);
   const auth = getAuth(app);
   connectAuthEmulator(auth, "http://127.0.0.1:9099", { disableWarnings: true });
   const db = getDatabase(app);
   connectDatabaseEmulator(db, "127.0.0.1", 9000);
-  return { app, auth, db };
+  return { app, auth, db, uid: null };
 }
 
-let host, player;
+const CODE = "GAME";
+const D = QUESTION_DURATION_MS;
+let host, a, b;
 
-beforeAll(() => { host = makeClient("host"); player = makeClient("player"); });
-afterAll(async () => { await deleteApp(host.app); await deleteApp(player.app); });
+beforeAll(async () => {
+  host = makeClient("host"); a = makeClient("pa"); b = makeClient("pb");
+  for (const c of [host, a, b]) c.uid = (await signInAnonymously(c.auth)).user.uid;
+});
+afterAll(async () => { for (const c of [host, a, b]) await deleteApp(c.app); });
 
-test("host→join→answer→reveal scores a correct answer as 1", async () => {
-  const code = "ZZZA";
-  const Q = 0;
-  const q = QUESTIONS[Q];
-
-  // Host signs in and creates the room.
-  const hostUid = (await signInAnonymously(host.auth)).user.uid;
-  await set(ref(host.db, `rooms/${code}`), {
-    host: hostUid, status: "lobby", createdAt: serverTimestamp(), currentQuestionIndex: 0,
+// --- host/player actions, mirroring web/shared/room.js ---
+async function createRoom() {
+  await set(ref(host.db, `rooms/${CODE}`), {
+    host: host.uid, status: "lobby", createdAt: 1, currentQuestionIndex: 0,
   });
-
-  // Player signs in and joins.
-  const playerUid = (await signInAnonymously(player.auth)).user.uid;
-  // No score on join — it's host-authoritative (see database.rules.json / room.js).
-  await set(ref(player.db, `rooms/${code}/players/${playerUid}`), {
-    name: "Pat", joinedAt: serverTimestamp(),
-  });
-
-  // Host asks the question.
-  await update(ref(host.db, `rooms/${code}`), {
+}
+async function join(c, name) {
+  await set(ref(c.db, `rooms/${CODE}/players/${c.uid}`), { name, joinedAt: 1 });
+}
+async function startQuestion(qIndex, startedAt) {
+  const q = QUESTIONS[qIndex];
+  await update(ref(host.db, `rooms/${CODE}`), {
     status: "question",
-    currentQuestionIndex: Q,
-    question: { index: Q, prompt: q.prompt, answers: q.answers },
+    currentQuestionIndex: qIndex,
+    question: { index: qIndex, prompt: q.prompt, answers: q.answers, startedAt },
+    reveal: null,
   });
-
-  // Player submits the correct answer.
-  await set(ref(player.db, `answers/${code}/${Q}/${playerUid}`), {
-    choice: q.correctIndex, answeredAt: serverTimestamp(),
-  });
-
-  // Host reveals + scores (mirrors room.js revealAndScore).
-  const answers = (await get(ref(host.db, `answers/${code}/${Q}`))).val() || {};
-  const players = (await get(ref(host.db, `rooms/${code}/players`))).val() || {};
+}
+async function answer(c, qIndex, choice, answeredAt) {
+  await set(ref(c.db, `answers/${CODE}/${qIndex}/${c.uid}`), { choice, answeredAt });
+}
+async function revealAndScore(qIndex) {
+  const q = QUESTIONS[qIndex];
+  const answers = (await get(ref(host.db, `answers/${CODE}/${qIndex}`))).val() || {};
+  const players = (await get(ref(host.db, `rooms/${CODE}/players`))).val() || {};
+  const startedAt = (await get(ref(host.db, `rooms/${CODE}/question/startedAt`))).val() || 0;
   const updates = {};
-  for (const uid of Object.keys(players)) {
-    const correct = answers[uid] && answers[uid].choice === q.correctIndex;
-    updates[`rooms/${code}/players/${uid}/score`] = (players[uid].score || 0) + (correct ? 1 : 0);
+  for (const id of Object.keys(players)) {
+    const ans = answers[id];
+    const correct = !!ans && ans.choice === q.correctIndex;
+    const points = roundScore({ correct, answeredAt: ans ? ans.answeredAt : 0, startedAt, durationMs: D });
+    updates[`rooms/${CODE}/players/${id}/score`] = (players[id].score || 0) + points;
   }
-  updates[`rooms/${code}/reveal`] = { questionIndex: Q, correctIndex: q.correctIndex };
-  updates[`rooms/${code}/status`] = "reveal";
+  updates[`rooms/${CODE}/reveal`] = { questionIndex: qIndex, correctIndex: q.correctIndex };
+  updates[`rooms/${CODE}/status`] = "reveal";
   await update(ref(host.db), updates);
+}
+async function endGame() { await update(ref(host.db, `rooms/${CODE}`), { status: "ended" }); }
 
-  // Player sees the reveal and a score of 1.
-  const room = (await get(ref(player.db, `rooms/${code}`))).val();
-  expect(room.status).toBe("reveal");
-  expect(room.reveal.correctIndex).toBe(q.correctIndex);
-  expect(room.players[playerUid].score).toBe(1);
+test("a two-round game accumulates speed scores and ranks the final leaderboard", async () => {
+  const q0 = QUESTIONS[0], q1 = QUESTIONS[1];
+  await createRoom();
+  await join(a, "Ana");
+  await join(b, "Ben");
+
+  // Round 0 — both correct; Ana instant (full), Ben at half time (base + half bonus).
+  await startQuestion(0, 1000);
+  await answer(a, 0, q0.correctIndex, 1000);       // instant -> BASE + SPEED
+  await answer(b, 0, q0.correctIndex, 1000 + D / 2); // half   -> BASE + SPEED/2
+  await revealAndScore(0);
+
+  // Round 1 — Ana wrong, Ben instant correct.
+  await startQuestion(1, 50000);
+  await answer(a, 1, (q1.correctIndex + 1) % 4, 50000); // wrong -> 0
+  await answer(b, 1, q1.correctIndex, 50000);           // instant -> BASE + SPEED
+  await revealAndScore(1);
+
+  await endGame();
+
+  const room = (await get(ref(host.db, `rooms/${CODE}`))).val();
+  expect(room.status).toBe("ended");
+  expect(room.players[a.uid].score).toBe(BASE_POINTS + SPEED_POINTS);                  // 1000
+  expect(room.players[b.uid].score).toBe((BASE_POINTS + SPEED_POINTS / 2) + (BASE_POINTS + SPEED_POINTS)); // 750 + 1000 = 1750
+
+  const ranked = Object.values(room.players).sort((x, y) => y.score - x.score);
+  expect(ranked[0].name).toBe("Ben");
+  expect(ranked[1].name).toBe("Ana");
 });

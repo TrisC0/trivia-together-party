@@ -16,4 +16,7 @@ service-account*.json
 .env.*
 .runtimeconfig.json
 
+# Local Claude Code / editor config
+.claude/
+
 .DS_Store
