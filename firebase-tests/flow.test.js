@@ -47,7 +47,8 @@ async function createRoom() {
   });
 }
 async function join(c, name) {
-  await set(ref(c.db, `rooms/${CODE}/players/${c.uid}`), { name, joinedAt: 1 });
+  // update (not set), mirroring room.js, so a rejoin never clobbers an existing score
+  await update(ref(c.db, `rooms/${CODE}/players/${c.uid}`), { name, joinedAt: 1 });
 }
 async function startQuestion(qIndex, startedAt) {
   const q = QUESTIONS[qIndex];
@@ -107,4 +108,16 @@ test("a two-round game accumulates speed scores and ranks the final leaderboard"
   const ranked = Object.values(room.players).sort((x, y) => y.score - x.score);
   expect(ranked[0].name).toBe("Ben");
   expect(ranked[1].name).toBe("Ana");
+});
+
+test("a player who rejoins (reconnect) keeps a host-assigned score", async () => {
+  const C = "RJON";
+  await set(ref(host.db, `rooms/${C}`), { host: host.uid, status: "lobby", createdAt: 1, currentQuestionIndex: 0 });
+  await update(ref(a.db, `rooms/${C}/players/${a.uid}`), { name: "Ana", joinedAt: 1 });  // initial join
+  await update(ref(host.db, `rooms/${C}/players/${a.uid}`), { score: 1234 });            // host scores
+  await update(ref(a.db, `rooms/${C}/players/${a.uid}`), { name: "Ana", joinedAt: 2 });  // rejoin (update, no score)
+
+  const player = (await get(ref(host.db, `rooms/${C}/players/${a.uid}`))).val();
+  expect(player.score).toBe(1234);
+  expect(player.name).toBe("Ana");
 });

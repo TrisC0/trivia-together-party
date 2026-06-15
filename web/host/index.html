@@ -35,7 +35,7 @@
     import { QUESTIONS } from "../shared/questions.js";
     import { QUESTION_DURATION_MS } from "../shared/scoring.js";
     import { fetchQuestions, CATEGORIES, DIFFICULTIES } from "../shared/opentdb.js";
-    import { createRoom, observeRoom, observeAnswerCount, startQuestion, revealAndScore, endGame, resetGame }
+    import { createRoom, observeRoom, observeAnswerCount, startQuestion, revealAndScore, endGame, resetGame, getRoom }
       from "../shared/room.js";
 
     const app = document.getElementById("app");
@@ -50,10 +50,22 @@
 
     let timedQuestion = -1, tick = null, unsubAnswers = null, playerCount = 0;
 
+    const HOST_KEY = "tt-host-room";
+    const qKey = (c) => `tt-host-questions:${c}`;
+
     let uid = null;
     try {
       uid = await signInAnon();
-      code = await createRoom(uid);
+      const saved = localStorage.getItem(HOST_KEY);
+      const existing = saved ? await getRoom(saved) : null;
+      if (existing && existing.host === uid) {
+        code = saved;                                  // resume the same room after a refresh
+        const sq = localStorage.getItem(qKey(code));   // restore the in-progress question set
+        if (sq) { try { gameQuestions = JSON.parse(sq); } catch {} }
+      } else {
+        code = await createRoom(uid);
+        localStorage.setItem(HOST_KEY, code);
+      }
     } catch (e) {
       app.textContent = "Could not start a room. Check your connection and refresh.";
       throw e;
@@ -73,6 +85,7 @@
       render(lastRoom);
       const fetched = await fetchQuestions({ amount: ROUND_COUNT, category, difficulty });
       gameQuestions = fetched.length ? fetched : QUESTIONS.slice(0, ROUND_COUNT);
+      localStorage.setItem(qKey(code), JSON.stringify(gameQuestions)); // survive a host refresh
       loading = false;
       startQuestion(code, 0, gameQuestions[0]);
     }
