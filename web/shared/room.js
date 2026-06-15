@@ -5,6 +5,12 @@ import {
   ref, set, update, get, onValue, serverTimestamp,
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 
+// Track the RTDB server clock so countdowns survive client clock skew.
+let serverOffset = 0;
+onValue(ref(db, ".info/serverTimeOffset"), (s) => { serverOffset = s.val() || 0; });
+/** Current time corrected to the server clock (ms). */
+export function serverNow() { return Date.now() + serverOffset; }
+
 /** 4-char A–Z room code. */
 export function randomCode() {
   const a = "ABCDEFGHJKLMNPQRSTUVWXYZ"; // no I/O to avoid confusion
@@ -75,6 +81,8 @@ export async function submitAnswer(code, qIndex, uid, choice) {
 
 /** Host: grade answers for `qIndex`, write scores, then publish the reveal. */
 export async function revealAndScore(code, qIndex, correctIndex) {
+  const status = (await get(ref(db, `rooms/${code}/status`))).val();
+  if (status !== "question") return; // already revealed — idempotent
   const answers = (await get(ref(db, `answers/${code}/${qIndex}`))).val() || {};
   const players = (await get(ref(db, `rooms/${code}/players`))).val() || {};
   const startedAt = (await get(ref(db, `rooms/${code}/question/startedAt`))).val() || 0;
@@ -109,5 +117,6 @@ export async function resetGame(code) {
   updates[`rooms/${code}/currentQuestionIndex`] = 0;
   updates[`rooms/${code}/question`] = null;
   updates[`rooms/${code}/reveal`] = null;
+  updates[`answers/${code}`] = null;
   await update(ref(db), updates);
 }

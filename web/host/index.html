@@ -35,7 +35,7 @@
     import { QUESTIONS } from "../shared/questions.js";
     import { QUESTION_DURATION_MS } from "../shared/scoring.js";
     import { fetchQuestions, CATEGORIES, DIFFICULTIES } from "../shared/opentdb.js";
-    import { createRoom, observeRoom, observeAnswerCount, startQuestion, revealAndScore, endGame, resetGame, getRoom }
+    import { createRoom, observeRoom, observeAnswerCount, startQuestion, revealAndScore, endGame, resetGame, getRoom, serverNow }
       from "../shared/room.js";
 
     const app = document.getElementById("app");
@@ -95,9 +95,9 @@
       if (timedQuestion === qi) return;
       stopTiming();
       timedQuestion = qi;
-      const startedAt = (room.question && room.question.startedAt) || Date.now();
+      const startedAt = (room.question && room.question.startedAt) || serverNow();
       tick = setInterval(() => {
-        const remaining = Math.max(0, startedAt + QUESTION_DURATION_MS - Date.now());
+        const remaining = Math.max(0, startedAt + QUESTION_DURATION_MS - serverNow());
         const el = document.getElementById("countdown");
         if (el) el.textContent = Math.ceil(remaining / 1000) + "s";
         if (remaining <= 0) doReveal();
@@ -173,9 +173,12 @@
 
       } else if (room.status === "ended") {
         const winner = ranked[0];
+        const tie = ranked.length >= 2 && (ranked[0].score || 0) === (ranked[1].score || 0);
         app.innerHTML = `
           <h1>Final results</h1>
-          ${winner ? `<div class="winner">🏆 ${esc(winner.avatar || "")} ${esc(winner.name)} wins!</div>` : ""}
+          ${tie
+            ? `<div class="winner">It's a tie!</div>`
+            : (winner ? `<div class="winner">🏆 ${esc(winner.avatar || "")} ${esc(winner.name)} wins!</div>` : "")}
           <ol class="board">${ranked.map(p =>
             `<li><span>${esc(p.avatar || "")} ${esc(p.name)}</span><span>${p.score || 0}</span></li>`).join("")}</ol>
           <button id="again">Play again</button>`;

@@ -79,6 +79,24 @@ async function revealAndScore(qIndex) {
   await update(ref(host.db), updates);
 }
 async function endGame() { await update(ref(host.db, `rooms/${CODE}`), { status: "ended" }); }
+// Idempotent reveal, mirroring web/shared/room.js revealAndScore: bail if not still "question".
+async function revealAndScoreIdempotent(qIndex) {
+  const status = (await get(ref(host.db, `rooms/${CODE}/status`))).val();
+  if (status !== "question") return; // already revealed
+  await revealAndScore(qIndex);
+}
+// Reset for a new game, mirroring web/shared/room.js resetGame (also clears answers/{code}).
+async function resetGame() {
+  const players = (await get(ref(host.db, `rooms/${CODE}/players`))).val() || {};
+  const updates = {};
+  for (const id of Object.keys(players)) updates[`rooms/${CODE}/players/${id}/score`] = 0;
+  updates[`rooms/${CODE}/status`] = "lobby";
+  updates[`rooms/${CODE}/currentQuestionIndex`] = 0;
+  updates[`rooms/${CODE}/question`] = null;
+  updates[`rooms/${CODE}/reveal`] = null;
+  updates[`answers/${CODE}`] = null;
+  await update(ref(host.db), updates);
+}
 
 test("a two-round game accumulates speed scores and ranks the final leaderboard", async () => {
   const q0 = QUESTIONS[0], q1 = QUESTIONS[1];
@@ -120,4 +138,48 @@ test("a player who rejoins (reconnect) keeps a host-assigned score", async () =>
   const player = (await get(ref(host.db, `rooms/${C}/players/${a.uid}`))).val();
   expect(player.score).toBe(1234);
   expect(player.name).toBe("Ana");
+});
+
+test("calling reveal twice does not double-score (idempotent reveal)", async () => {
+  const q0 = QUESTIONS[0];
+  await createRoom();
+  await set(ref(host.db, `answers/${CODE}`), null); // host clears answers from earlier tests
+  await join(a, "Ana");
+
+  await startQuestion(0, 1000);
+  await answer(a, 0, q0.correctIndex, 1000); // instant correct -> BASE + SPEED
+
+  await revealAndScoreIdempotent(0); // first reveal scores and moves status -> "reveal"
+  const afterFirst = (await get(ref(host.db, `rooms/${CODE}/players/${a.uid}/score`))).val();
+  expect(afterFirst).toBe(BASE_POINTS + SPEED_POINTS);
+
+  // Race: timer / all-answered / "Reveal now" all fire. Status is no longer "question",
+  // so the guard must make this a no-op rather than scoring again.
+  await revealAndScoreIdempotent(0);
+  const afterSecond = (await get(ref(host.db, `rooms/${CODE}/players/${a.uid}/score`))).val();
+  expect(afterSecond).toBe(BASE_POINTS + SPEED_POINTS); // unchanged — not doubled
+});
+
+test("resetGame clears the answers subtree so a replay isn't blocked", async () => {
+  const q0 = QUESTIONS[0];
+  await createRoom();
+  await set(ref(host.db, `answers/${CODE}`), null); // host clears answers from earlier tests
+  await join(a, "Ana");
+
+  // Play a round so answers/{code}/0 exists.
+  await startQuestion(0, 1000);
+  await answer(a, 0, q0.correctIndex, 1000);
+  await revealAndScoreIdempotent(0);
+  expect((await get(ref(host.db, `answers/${CODE}`))).exists()).toBe(true);
+
+  // Play again: reset must wipe answers (otherwise the `!data.exists()` rule blocks
+  // returning players on reused question index 0).
+  await resetGame();
+  expect((await get(ref(host.db, `answers/${CODE}`))).exists()).toBe(false);
+  expect((await get(ref(host.db, `rooms/${CODE}/players/${a.uid}/score`))).val()).toBe(0);
+
+  // And the player can now answer index 0 again in the new game.
+  await startQuestion(0, 2000);
+  await answer(a, 0, q0.correctIndex, 2000);
+  expect((await get(ref(host.db, `answers/${CODE}/0/${a.uid}`))).exists()).toBe(true);
 });
