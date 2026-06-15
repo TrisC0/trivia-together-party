@@ -2,7 +2,7 @@
 import { db } from "./firebase.js";
 import { roundScore, QUESTION_DURATION_MS } from "./scoring.js";
 import {
-  ref, set, update, get, child, onValue, onDisconnect, serverTimestamp,
+  ref, set, update, get, onValue, serverTimestamp,
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 
 /** 4-char A–Z room code. */
@@ -34,11 +34,16 @@ export async function createRoom(uid) {
 export async function joinRoom(code, uid, name) {
   const snap = await get(ref(db, `rooms/${code}`));
   if (!snap.exists()) throw new Error("Room not found");
-  const meRef = ref(db, `rooms/${code}/players/${uid}`);
-  // No `score` here: the rules make score host-authoritative, so a player may not
-  // write it. Score is absent until the host sets it in revealAndScore; readers use `|| 0`.
-  await set(meRef, { name: name.slice(0, 24), joinedAt: serverTimestamp() });
-  onDisconnect(meRef).remove();
+  // `update` (not `set`) and no onDisconnect removal, so a refresh/reconnect keeps the
+  // player's slot and host-assigned score. No `score` here — it stays host-authoritative.
+  await update(ref(db, `rooms/${code}/players/${uid}`), {
+    name: name.slice(0, 24), joinedAt: serverTimestamp(),
+  });
+}
+
+/** One-time read of a room (null if it doesn't exist). Used for reconnect-resume. */
+export async function getRoom(code) {
+  return (await get(ref(db, `rooms/${code}`))).val();
 }
 
 /** Subscribe to the whole room object. Returns an unsubscribe function. */

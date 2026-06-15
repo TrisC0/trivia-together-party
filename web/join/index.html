@@ -24,11 +24,12 @@
   <script type="module">
     import { signInAnon } from "../shared/firebase.js";
     import { QUESTION_DURATION_MS } from "../shared/scoring.js";
-    import { joinRoom, observeRoom, submitAnswer } from "../shared/room.js";
+    import { joinRoom, observeRoom, submitAnswer, getRoom } from "../shared/room.js";
 
     const app = document.getElementById("app");
     let code = null, answeredFor = -1, tick = null;
 
+    const JOIN_KEY = "tt-join";
     let uid = null;
     try {
       uid = await signInAnon();
@@ -36,7 +37,22 @@
       app.textContent = "Couldn't connect. Check your connection and refresh.";
       throw e;
     }
-    renderJoin();
+
+    // Reconnect-resume: if we joined a room before, rejoin it instead of asking again.
+    const saved = JSON.parse(localStorage.getItem(JOIN_KEY) || "null");
+    if (saved && saved.code) {
+      const room = await getRoom(saved.code);
+      if (room) {
+        code = saved.code;
+        await joinRoom(code, uid, saved.name);
+        observeRoom(code, render);
+      } else {
+        localStorage.removeItem(JOIN_KEY);
+        renderJoin();
+      }
+    } else {
+      renderJoin();
+    }
 
     function renderJoin(error) {
       app.innerHTML = `
@@ -54,6 +70,7 @@
       try {
         await joinRoom(c, uid, name);
         code = c;
+        localStorage.setItem(JOIN_KEY, JSON.stringify({ code, name }));
         observeRoom(code, render);
       } catch (e) {
         renderJoin("Room not found. Check the code.");
