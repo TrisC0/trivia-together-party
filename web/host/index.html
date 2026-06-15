@@ -103,6 +103,8 @@
         if (remaining <= 0) doReveal();
       }, 250);
       unsubAnswers = observeAnswerCount(code, qi, (n) => {
+        const el = document.getElementById("answered");
+        if (el) el.textContent = `${n} / ${playerCount} answered`;
         if (playerCount > 0 && n >= playerCount) doReveal();
       });
     }
@@ -150,7 +152,10 @@
           <div class="meta">Question ${q.index + 1} of ${total}</div>
           <div class="timer" id="countdown">…</div>
           <h1>${esc(q.prompt)}</h1>
-          <div class="answers">${q.answers.map(a => `<div>${esc(a)}</div>`).join("")}</div>`;
+          <div class="answers">${q.answers.map(a => `<div>${esc(a)}</div>`).join("")}</div>
+          <div class="meta" id="answered">0 / ${playerCount} answered</div>
+          <button id="revealnow">Reveal now</button>`;
+        bind("revealnow", doReveal);
 
       } else if (room.status === "reveal") {
         const idx = room.reveal.questionIndex;
