@@ -64,6 +64,7 @@
       if (!room) return;
       stopTick();
       if (room.status === "lobby") {
+        answeredFor = -1; // clear any lock from a previous game (Play again)
         app.innerHTML = `<h2>You're in!</h2><p class="msg">Waiting for the host to start…</p>`;
       } else if (room.status === "question") {
         renderQuestion(room);

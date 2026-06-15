@@ -15,6 +15,7 @@
     ul { list-style:none; padding:0; display:flex; flex-wrap:wrap; gap:.75rem; justify-content:center; }
     li { background:#22305c; padding:.5rem 1rem; border-radius:999px; }
     select { font-size:1.05rem; padding:.55rem 1rem; border-radius:10px; border:0; background:#22305c; color:#fff; }
+    .pickers { display:flex; gap:.75rem; flex-wrap:wrap; justify-content:center; }
     button { font-size:1.25rem; padding:.75rem 2rem; border:0; border-radius:12px; background:#7cf; color:#101427; font-weight:700; cursor:pointer; }
     button:disabled { opacity:.5; cursor:default; }
     .answers { display:grid; grid-template-columns:1fr 1fr; gap:1rem; max-width:760px; }
@@ -33,8 +34,8 @@
     import { signInAnon } from "../shared/firebase.js";
     import { QUESTIONS } from "../shared/questions.js";
     import { QUESTION_DURATION_MS } from "../shared/scoring.js";
-    import { fetchQuestions, CATEGORIES } from "../shared/opentdb.js";
-    import { createRoom, observeRoom, observeAnswerCount, startQuestion, revealAndScore, endGame }
+    import { fetchQuestions, CATEGORIES, DIFFICULTIES } from "../shared/opentdb.js";
+    import { createRoom, observeRoom, observeAnswerCount, startQuestion, revealAndScore, endGame, resetGame }
       from "../shared/room.js";
 
     const app = document.getElementById("app");
@@ -43,6 +44,7 @@
     let code = null;
     let gameQuestions = QUESTIONS;   // replaced with fetched questions at game start
     let category = null;             // host-selected OpenTDB category id
+    let difficulty = null;           // host-selected OpenTDB difficulty
     let loading = false;
     let lastRoom = null;
 
@@ -69,7 +71,7 @@
     async function beginGame() {
       loading = true;
       render(lastRoom);
-      const fetched = await fetchQuestions({ amount: ROUND_COUNT, category });
+      const fetched = await fetchQuestions({ amount: ROUND_COUNT, category, difficulty });
       gameQuestions = fetched.length ? fetched : QUESTIONS.slice(0, ROUND_COUNT);
       loading = false;
       startQuestion(code, 0, gameQuestions[0]);
@@ -110,16 +112,23 @@
       const total = gameQuestions.length;
 
       if (room.status === "lobby") {
-        const opts = CATEGORIES.map(c =>
+        const catOpts = CATEGORIES.map(c =>
           `<option value="${c.id ?? ""}" ${(c.id ?? null) === category ? "selected" : ""}>${esc(c.label)}</option>`).join("");
+        const diffOpts = DIFFICULTIES.map(d =>
+          `<option value="${d.id ?? ""}" ${(d.id ?? null) === difficulty ? "selected" : ""}>${esc(d.label)}</option>`).join("");
         app.innerHTML = `
           <h1>Join at this code:</h1>
           <div class="code">${code}</div>
           <ul>${players.map(p => `<li>${esc(p.name)}</li>`).join("")}</ul>
-          <select id="cat" ${loading ? "disabled" : ""}>${opts}</select>
+          <div class="pickers">
+            <select id="cat" ${loading ? "disabled" : ""}>${catOpts}</select>
+            <select id="diff" ${loading ? "disabled" : ""}>${diffOpts}</select>
+          </div>
           <button id="start" ${players.length === 0 || loading ? "disabled" : ""}>${loading ? "Loading questions…" : "Start game"}</button>`;
-        const sel = document.getElementById("cat");
-        if (sel) sel.onchange = () => { category = sel.value ? Number(sel.value) : null; };
+        const catSel = document.getElementById("cat");
+        if (catSel) catSel.onchange = () => { category = catSel.value ? Number(catSel.value) : null; };
+        const diffSel = document.getElementById("diff");
+        if (diffSel) diffSel.onchange = () => { difficulty = diffSel.value || null; };
         bind("start", beginGame);
 
       } else if (room.status === "question") {
@@ -150,7 +159,9 @@
           <h1>Final results</h1>
           ${winner ? `<div class="winner">🏆 ${esc(winner.name)} wins!</div>` : ""}
           <ol class="board">${ranked.map(p =>
-            `<li><span>${esc(p.name)}</span><span>${p.score || 0}</span></li>`).join("")}</ol>`;
+            `<li><span>${esc(p.name)}</span><span>${p.score || 0}</span></li>`).join("")}</ol>
+          <button id="again">Play again</button>`;
+        bind("again", () => resetGame(code));
       }
     }
 
