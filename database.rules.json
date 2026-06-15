@@ -14,10 +14,11 @@
         "createdAt": { ".validate": "newData.isNumber()" },
 
         "question": {
-          "prompt":  { ".validate": "newData.isString()" },
-          "answers": { ".validate": "newData.hasChildren()" },
-          "index":   { ".validate": "newData.isNumber()" },
-          "$other":  { ".validate": false }
+          "prompt":    { ".validate": "newData.isString()" },
+          "answers":   { ".validate": "newData.hasChildren()" },
+          "index":     { ".validate": "newData.isNumber()" },
+          "startedAt": { ".validate": "newData.isNumber()" },
+          "$other":    { ".validate": false }
         },
 
         "reveal": {

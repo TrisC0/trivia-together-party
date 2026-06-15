@@ -1,6 +1,7 @@
 // The only module that touches RTDB paths. Paths mirror database.rules.json.
 import { db } from "./firebase.js";
 import { QUESTIONS } from "./questions.js";
+import { roundScore, QUESTION_DURATION_MS } from "./scoring.js";
 import {
   ref, set, update, get, child, onValue, onDisconnect, serverTimestamp,
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
@@ -46,13 +47,18 @@ export function observeRoom(code, cb) {
   return onValue(ref(db, `rooms/${code}`), (snap) => cb(snap.val()));
 }
 
+/** Host: live count of answers submitted for a question (used to reveal early). */
+export function observeAnswerCount(code, qIndex, cb) {
+  return onValue(ref(db, `answers/${code}/${qIndex}`), (snap) => cb(snap.size));
+}
+
 /** Host: push question `qIndex` (no correct answer) and enter the question phase. */
 export async function startQuestion(code, qIndex) {
   const q = QUESTIONS[qIndex];
   await update(ref(db, `rooms/${code}`), {
     status: "question",
     currentQuestionIndex: qIndex,
-    question: { index: qIndex, prompt: q.prompt, answers: q.answers },
+    question: { index: qIndex, prompt: q.prompt, answers: q.answers, startedAt: serverTimestamp() },
     reveal: null,
   });
 }
@@ -67,17 +73,27 @@ export async function submitAnswer(code, qIndex, uid, choice) {
 /** Host: grade answers for `qIndex`, write scores, then publish the reveal. */
 export async function revealAndScore(code, qIndex) {
   const q = QUESTIONS[qIndex];
-  const ansSnap = await get(ref(db, `answers/${code}/${qIndex}`));
-  const answers = ansSnap.val() || {};
-  const playersSnap = await get(ref(db, `rooms/${code}/players`));
-  const players = playersSnap.val() || {};
+  const answers = (await get(ref(db, `answers/${code}/${qIndex}`))).val() || {};
+  const players = (await get(ref(db, `rooms/${code}/players`))).val() || {};
+  const startedAt = (await get(ref(db, `rooms/${code}/question/startedAt`))).val() || 0;
   const updates = {};
-  for (const uid of Object.keys(players)) {
-    const correct = answers[uid] && answers[uid].choice === q.correctIndex;
-    const current = players[uid].score || 0;
-    updates[`rooms/${code}/players/${uid}/score`] = current + (correct ? 1 : 0);
+  for (const id of Object.keys(players)) {
+    const ans = answers[id];
+    const correct = !!ans && ans.choice === q.correctIndex;
+    const points = roundScore({
+      correct,
+      answeredAt: ans ? ans.answeredAt : 0,
+      startedAt,
+      durationMs: QUESTION_DURATION_MS,
+    });
+    updates[`rooms/${code}/players/${id}/score`] = (players[id].score || 0) + points;
   }
   updates[`rooms/${code}/reveal`] = { questionIndex: qIndex, correctIndex: q.correctIndex };
   updates[`rooms/${code}/status`] = "reveal";
   await update(ref(db), updates);
+}
+
+/** Host: end the game and show the final leaderboard. */
+export async function endGame(code) {
+  await update(ref(db, `rooms/${code}`), { status: "ended" });
 }
