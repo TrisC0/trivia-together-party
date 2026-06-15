@@ -14,6 +14,7 @@
     .timer { font-size: clamp(2rem, 8vw, 4rem); font-weight:800; color:#7cf; }
     ul { list-style:none; padding:0; display:flex; flex-wrap:wrap; gap:.75rem; justify-content:center; }
     li { background:#22305c; padding:.5rem 1rem; border-radius:999px; }
+    select { font-size:1.05rem; padding:.55rem 1rem; border-radius:10px; border:0; background:#22305c; color:#fff; }
     button { font-size:1.25rem; padding:.75rem 2rem; border:0; border-radius:12px; background:#7cf; color:#101427; font-weight:700; cursor:pointer; }
     button:disabled { opacity:.5; cursor:default; }
     .answers { display:grid; grid-template-columns:1fr 1fr; gap:1rem; max-width:760px; }
@@ -23,6 +24,7 @@
     ol.board li { background:#22305c; padding:.5rem 1rem; border-radius:10px; display:flex; justify-content:space-between; }
     ol.board li::before { counter-increment:rank; content:counter(rank) ". "; opacity:.6; margin-right:.5rem; }
     .winner { font-size:1.6rem; color:#7cf; font-weight:800; }
+    .hint { opacity:.6; }
   </style>
 </head>
 <body>
@@ -31,17 +33,20 @@
     import { signInAnon } from "../shared/firebase.js";
     import { QUESTIONS } from "../shared/questions.js";
     import { QUESTION_DURATION_MS } from "../shared/scoring.js";
+    import { fetchQuestions, CATEGORIES } from "../shared/opentdb.js";
     import { createRoom, observeRoom, observeAnswerCount, startQuestion, revealAndScore, endGame }
       from "../shared/room.js";
 
     const app = document.getElementById("app");
-    const TOTAL = QUESTIONS.length;
+    const ROUND_COUNT = 8;
 
     let code = null;
-    let timedQuestion = -1;   // qIndex currently being timed (-1 = none)
-    let tick = null;          // countdown interval
-    let unsubAnswers = null;  // early-reveal listener
-    let playerCount = 0;
+    let gameQuestions = QUESTIONS;   // replaced with fetched questions at game start
+    let category = null;             // host-selected OpenTDB category id
+    let loading = false;
+    let lastRoom = null;
+
+    let timedQuestion = -1, tick = null, unsubAnswers = null, playerCount = 0;
 
     let uid = null;
     try {
@@ -55,14 +60,24 @@
 
     function onRoom(room) {
       if (!room) return;
+      lastRoom = room;
       playerCount = room.players ? Object.keys(room.players).length : 0;
       if (room.status === "question") ensureTiming(room); else stopTiming();
       render(room);
     }
 
+    async function beginGame() {
+      loading = true;
+      render(lastRoom);
+      const fetched = await fetchQuestions({ amount: ROUND_COUNT, category });
+      gameQuestions = fetched.length ? fetched : QUESTIONS.slice(0, ROUND_COUNT);
+      loading = false;
+      startQuestion(code, 0, gameQuestions[0]);
+    }
+
     function ensureTiming(room) {
       const qi = room.question ? room.question.index : 0;
-      if (timedQuestion === qi) return;          // already timing this question
+      if (timedQuestion === qi) return;
       stopTiming();
       timedQuestion = qi;
       const startedAt = (room.question && room.question.startedAt) || Date.now();
@@ -86,42 +101,48 @@
     function doReveal() {
       const qi = timedQuestion;
       stopTiming();
-      if (qi >= 0) revealAndScore(code, qi);
+      if (qi >= 0 && gameQuestions[qi]) revealAndScore(code, qi, gameQuestions[qi].correctIndex);
     }
 
     function render(room) {
       const players = room.players ? Object.values(room.players) : [];
       const ranked = [...players].sort((a, b) => (b.score || 0) - (a.score || 0));
+      const total = gameQuestions.length;
 
       if (room.status === "lobby") {
+        const opts = CATEGORIES.map(c =>
+          `<option value="${c.id ?? ""}" ${(c.id ?? null) === category ? "selected" : ""}>${esc(c.label)}</option>`).join("");
         app.innerHTML = `
           <h1>Join at this code:</h1>
           <div class="code">${code}</div>
           <ul>${players.map(p => `<li>${esc(p.name)}</li>`).join("")}</ul>
-          <button id="start" ${players.length === 0 ? "disabled" : ""}>Start game</button>`;
-        bind("start", () => startQuestion(code, 0));
+          <select id="cat" ${loading ? "disabled" : ""}>${opts}</select>
+          <button id="start" ${players.length === 0 || loading ? "disabled" : ""}>${loading ? "Loading questions…" : "Start game"}</button>`;
+        const sel = document.getElementById("cat");
+        if (sel) sel.onchange = () => { category = sel.value ? Number(sel.value) : null; };
+        bind("start", beginGame);
 
       } else if (room.status === "question") {
         const q = room.question;
         app.innerHTML = `
-          <div class="meta">Question ${q.index + 1} of ${TOTAL}</div>
+          <div class="meta">Question ${q.index + 1} of ${total}</div>
           <div class="timer" id="countdown">…</div>
           <h1>${esc(q.prompt)}</h1>
           <div class="answers">${q.answers.map(a => `<div>${esc(a)}</div>`).join("")}</div>`;
 
       } else if (room.status === "reveal") {
         const idx = room.reveal.questionIndex;
-        const q = QUESTIONS[idx];
-        const last = idx >= TOTAL - 1;
+        const q = gameQuestions[idx];
+        const last = idx >= total - 1;
         app.innerHTML = `
-          <div class="meta">Question ${idx + 1} of ${TOTAL}</div>
+          <div class="meta">Question ${idx + 1} of ${total}</div>
           <h1>Answer: ${esc(q.answers[q.correctIndex])}</h1>
           <div class="answers">${q.answers.map((a, i) =>
             `<div class="${i === q.correctIndex ? "correct" : ""}">${esc(a)}</div>`).join("")}</div>
           <ol class="board">${ranked.map(p =>
             `<li><span>${esc(p.name)}</span><span>${p.score || 0}</span></li>`).join("")}</ol>
           <button id="next">${last ? "Final results" : "Next question"}</button>`;
-        bind("next", () => last ? endGame(code) : startQuestion(code, idx + 1));
+        bind("next", () => last ? endGame(code) : startQuestion(code, idx + 1, gameQuestions[idx + 1]));
 
       } else if (room.status === "ended") {
         const winner = ranked[0];

@@ -1,6 +1,5 @@
 // The only module that touches RTDB paths. Paths mirror database.rules.json.
 import { db } from "./firebase.js";
-import { QUESTIONS } from "./questions.js";
 import { roundScore, QUESTION_DURATION_MS } from "./scoring.js";
 import {
   ref, set, update, get, child, onValue, onDisconnect, serverTimestamp,
@@ -53,8 +52,7 @@ export function observeAnswerCount(code, qIndex, cb) {
 }
 
 /** Host: push question `qIndex` (no correct answer) and enter the question phase. */
-export async function startQuestion(code, qIndex) {
-  const q = QUESTIONS[qIndex];
+export async function startQuestion(code, qIndex, q) {
   await update(ref(db, `rooms/${code}`), {
     status: "question",
     currentQuestionIndex: qIndex,
@@ -71,15 +69,14 @@ export async function submitAnswer(code, qIndex, uid, choice) {
 }
 
 /** Host: grade answers for `qIndex`, write scores, then publish the reveal. */
-export async function revealAndScore(code, qIndex) {
-  const q = QUESTIONS[qIndex];
+export async function revealAndScore(code, qIndex, correctIndex) {
   const answers = (await get(ref(db, `answers/${code}/${qIndex}`))).val() || {};
   const players = (await get(ref(db, `rooms/${code}/players`))).val() || {};
   const startedAt = (await get(ref(db, `rooms/${code}/question/startedAt`))).val() || 0;
   const updates = {};
   for (const id of Object.keys(players)) {
     const ans = answers[id];
-    const correct = !!ans && ans.choice === q.correctIndex;
+    const correct = !!ans && ans.choice === correctIndex;
     const points = roundScore({
       correct,
       answeredAt: ans ? ans.answeredAt : 0,
@@ -88,7 +85,7 @@ export async function revealAndScore(code, qIndex) {
     });
     updates[`rooms/${code}/players/${id}/score`] = (players[id].score || 0) + points;
   }
-  updates[`rooms/${code}/reveal`] = { questionIndex: qIndex, correctIndex: q.correctIndex };
+  updates[`rooms/${code}/reveal`] = { questionIndex: qIndex, correctIndex };
   updates[`rooms/${code}/status`] = "reveal";
   await update(ref(db), updates);
 }
