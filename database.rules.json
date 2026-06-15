@@ -32,7 +32,7 @@
           "$uid": {
             ".write": "auth != null && ($uid === auth.uid || root.child('rooms').child($code).child('host').val() === auth.uid)",
             "name":     { ".validate": "newData.isString() && newData.val().length <= 24" },
-            "avatar":   { ".validate": "newData.isString()" },
+            "avatar":   { ".validate": "newData.isString() && newData.val().length <= 8" },
             "joinedAt": { ".validate": "newData.isNumber()" },
             "score":    { ".validate": "newData.isNumber() && root.child('rooms').child($code).child('host').val() === auth.uid" },
             "$other":   { ".validate": false }
@@ -46,6 +46,7 @@
     "answers": {
       "$code": {
         ".read": "auth != null && root.child('rooms').child($code).child('host').val() === auth.uid",
+        ".write": "auth != null && root.child('rooms').child($code).child('host').val() === auth.uid",
         "$qIndex": {
           "$uid": {
             ".write": "auth != null && $uid === auth.uid && !data.exists() && root.child('rooms').child($code).child('status').val() === 'question'",

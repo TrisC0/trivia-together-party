@@ -27,7 +27,7 @@
   <script type="module">
     import { signInAnon } from "../shared/firebase.js";
     import { QUESTION_DURATION_MS } from "../shared/scoring.js";
-    import { joinRoom, observeRoom, submitAnswer, getRoom } from "../shared/room.js";
+    import { joinRoom, observeRoom, submitAnswer, getRoom, serverNow } from "../shared/room.js";
 
     const app = document.getElementById("app");
     const AVATARS = ["🦊", "🐼", "🐸", "🐙", "🦁", "🐝", "🦄", "🐧", "🐢", "🦉", "🐶", "🐱"];
@@ -115,15 +115,20 @@
         ${locked ? `<p class="msg">Answer locked in.</p>` : ""}`;
       if (!locked) {
         app.querySelectorAll(".answers button").forEach(b => b.onclick = async () => {
+          const prev = answeredFor;
           answeredFor = q.index;
-          await submitAnswer(code, q.index, uid, Number(b.dataset.i));
-          renderQuestion(room);
+          try {
+            await submitAnswer(code, q.index, uid, Number(b.dataset.i));
+            renderQuestion(room);
+          } catch {
+            answeredFor = prev; // submission rejected (e.g. round already revealed)
+          }
         });
       }
-      const startedAt = q.startedAt || Date.now();
+      const startedAt = q.startedAt || serverNow();
       stopTick();
       tick = setInterval(() => {
-        const remaining = Math.max(0, startedAt + QUESTION_DURATION_MS - Date.now());
+        const remaining = Math.max(0, startedAt + QUESTION_DURATION_MS - serverNow());
         const el = document.getElementById("cd");
         if (el) el.textContent = Math.ceil(remaining / 1000) + "s";
         if (remaining <= 0) {
