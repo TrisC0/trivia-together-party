@@ -5,30 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Trivia Together — Host</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-  <style>
-    body { font-family: system-ui, sans-serif; margin: 0; background:#101427; color:#fff;
-           min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1.25rem; padding:1.5rem; text-align:center; }
-    h1 { font-size: clamp(1.8rem, 5vw, 3.4rem); margin:0; }
-    .code { font-size: clamp(3rem, 12vw, 7rem); letter-spacing:.3em; font-weight:800; color:#7cf; }
-    .meta { opacity:.6; letter-spacing:.05em; text-transform:uppercase; font-size:.9rem; }
-    .timer { font-size: clamp(2rem, 8vw, 4rem); font-weight:800; color:#7cf; }
-    ul { list-style:none; padding:0; display:flex; flex-wrap:wrap; gap:.75rem; justify-content:center; }
-    li { background:#22305c; padding:.5rem 1rem; border-radius:999px; }
-    select { font-size:1.05rem; padding:.55rem 1rem; border-radius:10px; border:0; background:#22305c; color:#fff; }
-    .pickers { display:flex; gap:.75rem; flex-wrap:wrap; justify-content:center; }
-    button { font-size:1.25rem; padding:.75rem 2rem; border:0; border-radius:12px; background:#7cf; color:#101427; font-weight:700; cursor:pointer; }
-    button:disabled { opacity:.5; cursor:default; }
-    .answers { display:grid; grid-template-columns:1fr 1fr; gap:1rem; max-width:760px; }
-    .answers div { background:#22305c; padding:1rem 1.5rem; border-radius:12px; font-size:1.4rem; }
-    .answers div.correct { background:#2ecc71; color:#101427; font-weight:700; }
-    ol.board { list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:.4rem; min-width:260px; counter-reset:rank; }
-    ol.board li { background:#22305c; padding:.5rem 1rem; border-radius:10px; display:flex; justify-content:space-between; }
-    ol.board li::before { counter-increment:rank; content:counter(rank) ". "; opacity:.6; margin-right:.5rem; }
-    .winner { font-size:1.6rem; color:#7cf; font-weight:800; }
-    .hint { opacity:.6; }
-  </style>
+  <link rel="stylesheet" href="../shared/theme.css" />
 </head>
-<body>
+<body class="page-host">
   <div id="app">Loading…</div>
   <script type="module">
     import { signInAnon } from "../shared/firebase.js";

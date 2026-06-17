@@ -5,19 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Trivia Together — Party</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-  <style>
-    body { font-family: system-ui, sans-serif; margin: 0; background:#101427; color:#fff;
-           min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2rem; padding:1.5rem; text-align:center; }
-    h1 { font-size: clamp(2.2rem, 7vw, 4rem); margin:0; }
-    p.tag { margin:0; opacity:.75; font-size:1.1rem; max-width:32ch; }
-    .actions { display:flex; flex-wrap:wrap; gap:1rem; justify-content:center; }
-    a.btn { font-size:1.25rem; padding:.9rem 2.2rem; border-radius:12px; text-decoration:none; font-weight:700; }
-    a.host { background:#7cf; color:#101427; }
-    a.join { background:#22305c; color:#fff; }
-    .hint { opacity:.55; font-size:.9rem; max-width:40ch; }
-  </style>
+  <link rel="stylesheet" href="shared/theme.css" />
 </head>
-<body>
+<body class="page-landing">
   <h1>Trivia Together</h1>
   <p class="tag">Play trivia with the room. The big screen hosts; everyone answers on their phone.</p>
   <div class="actions">

@@ -5,24 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Trivia Together — Join</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-  <style>
-    body { font-family:system-ui, sans-serif; margin:0; background:#101427; color:#fff;
-           min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1rem; padding:1rem; text-align:center; }
-    input { font-size:1.25rem; padding:.6rem; border-radius:10px; border:0; text-transform:uppercase; width:80%; max-width:320px; }
-    input.name { text-transform:none; }
-    button { font-size:1.25rem; padding:.75rem 1.5rem; border:0; border-radius:12px; background:#7cf; color:#101427; font-weight:700; width:80%; max-width:320px; }
-    .answers { display:grid; gap:.75rem; width:100%; max-width:360px; }
-    .answers button { width:100%; }
-    .answers button:disabled { opacity:.45; }
-    .timer { font-size:2rem; font-weight:800; color:#7cf; }
-    .big { font-size:2rem; font-weight:800; color:#7cf; margin:.2rem 0; }
-    .msg { opacity:.8; }
-    .avatars { display:grid; grid-template-columns:repeat(6, 1fr); gap:.4rem; width:100%; max-width:340px; }
-    .av { width:auto; font-size:1.5rem; padding:.35rem 0; background:#22305c; border-radius:10px; }
-    .av.sel { outline:3px solid #7cf; }
-  </style>
+  <link rel="stylesheet" href="../shared/theme.css" />
 </head>
-<body>
+<body class="page-join">
   <div id="app">Loading…</div>
   <script type="module">
     import { signInAnon } from "../shared/firebase.js";
